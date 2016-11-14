@@ -61,19 +61,4 @@ if save:
     circ_fig.savefig('{}wPLI_circle_{}_{}.pdf' .format(figures_path, subj, cond), format='pdf', dpi=300)
 
 
-
-
-
-
 # Graph Theory
-binary_mats_p50 = binarize(con_mat, 50)
-binary_mats_p90 = binarize(con_mat, 90)
-
-file_nodes = figures_path + 'bnw/' + 'nodes_{}_{}_' .format(subj, cond)
-make_bnw_edges(file_nodes, binary_mats_p90, titles)
-
-graph = nx.from_numpy_matrix(binary_mats_p50[:,:,0])
-
-
-
-

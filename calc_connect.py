@@ -1,5 +1,5 @@
 import mne
-from wake_sleep_info import subjects, conditions, dat_path, results_path
+from wake_sleep_info import subjects, conditions, study_path, results_path
 from connectivity_fxs import add_event_to_continuous
 import os.path as op
 import numpy as np
@@ -17,8 +17,10 @@ def calc_connectivity(file, epoch_length):
     epochs = mne.Epochs(raw, events, event_id={'10s': 1}, tmin=0, tmax=10, baseline=(None, None),
                         picks=picks, reject=reject)
     epochs.drop_bad()
-    fmin = (1, 4, 8, 13, 60)
-    fmax = (4, 8, 13, 30, 120)
+    epochs.plot()
+
+    fmin = (1, 4, 8, 13, 30, 60)
+    fmax = (4, 7, 13, 30, 47, 120)
     con, freqs, times, n_epochs, n_tapers = mne.connectivity.spectral_connectivity(epochs, method='wpli',
                                                                                    sfreq=epochs.info['sfreq'],
                                                                                    mode='multitaper', fmin=fmin,
@@ -42,11 +44,11 @@ def calc_connectivity(file, epoch_length):
     return con, freqs, times, n_epochs, n_tapers, con_mat, ch_names
 
 
-subj = 'P14'
+subj = 'P9'
 
 for subj in subjects:
     for cond in conditions[subj]:
         archivo = '{}_{}_OK.set' .format(subj, cond)
-        file = op.join(dat_path, 'datos_v1', archivo)
+        file = op.join(study_path, 'datos_v1', archivo)
 
         con, freqs, times, n_epochs, n_tapers, con_mat, ch_names = calc_connectivity(file, epoch_length=10)

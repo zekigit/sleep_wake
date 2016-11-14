@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-from wake_sleep_info import subjects, conditions, dat_path
+from wake_sleep_info import subjects, conditions, study_path
 
 hists, axes = plt.subplots(1, 3, figsize=(12, 6))
 for ix, subj in enumerate(subjects):

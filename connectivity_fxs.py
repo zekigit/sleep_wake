@@ -1,19 +1,14 @@
 import numpy as np
+import matplotlib.pyplot as plt
 
-def binarize(con, percentile):
-    for fq in range(con.shape[2]):
-        adj_mat = con[:, :, fq]
-        values = adj_mat[np.tril_indices(adj_mat.shape[0])]
-        per = np.percentile(values, percentile)
-        adj_mat_bin = np.copy(adj_mat)
-        adj_mat_bin[adj_mat_bin < per] = int(0)
-        adj_mat_bin[adj_mat_bin >= per] = int(1)
-        if fq == 0:
-            binary_mats = adj_mat_bin
-        else:
-            binary_mats = np.dstack((binary_mats, adj_mat_bin))
 
-    return binary_mats
+def binarize(con_mat, percentile):
+    values = con_mat[np.tril_indices(con_mat.shape[0])]
+    per = np.percentile(values, percentile)
+    adj_mat_bin = np.copy(con_mat)
+    adj_mat_bin[adj_mat_bin < per] = int(0)
+    adj_mat_bin[adj_mat_bin >= per] = int(1)
+    return adj_mat_bin
 
 
 def add_event_to_continuous(raw, epoch_length):
@@ -152,3 +147,16 @@ def raw_from_neo(fname):
     raw = mne.io.RawArray(data, info)
     raw.add_events(events)
     return raw
+
+
+def discrete_cmap(N, base_cmap=None):
+    """Create an N-bin discrete colormap from the specified input map"""
+
+    # Note that if base_cmap is a string or None, you can simply do
+    #    return plt.cm.get_cmap(base_cmap, N)
+    # The following works for string, None, or a colormap instance:
+
+    base = plt.cm.get_cmap(base_cmap)
+    color_list = base(np.linspace(0, 1, N))
+    cmap_name = base.name + str(N)
+    return base.from_list(cmap_name, color_list, N)
