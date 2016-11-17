@@ -3,6 +3,7 @@
 
 import numpy as np
 
+
 def avalanchas(datos):
     bin_mat = np.empty([0, datos.shape[1]])
     print('Calculating avalanches,  Channels x Samples:', bin_mat.shape)
@@ -11,7 +12,6 @@ def avalanchas(datos):
         ch_std = np.std(ch)*3.5
         ch_bin = np.where(abs(ch) > ch_std, 1, 0)
         bin_mat = np.vstack((bin_mat, ch_bin))
-
 
     av_size = np.empty([0,0])
     id1 = 0

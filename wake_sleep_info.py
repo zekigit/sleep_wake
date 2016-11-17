@@ -21,3 +21,6 @@ ch_info_path = study_path + 'info/'
 scalings = {'eeg': 150e-6}
 
 reject = {'eeg': 150e6}
+
+epoch_info = {'tmin': 0, 'tmax': 0.5, 'reject': reject}
+
