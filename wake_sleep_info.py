@@ -13,10 +13,6 @@ conds_x_subj = {'s1': ('wake', 'sleep'),
 
 study_path = '/Users/lpen/Documents/wake_sleep/study'
 data_path = study_path + 'data/'
-results_path = study_path + 'results/'
-figures_path = study_path + 'figures/'
-ch_info_path = study_path + 'info/'
-
 
 scalings = {'eeg': 150e-6}
 
@@ -24,3 +20,8 @@ reject = {'eeg': 150e6}
 
 epoch_info = {'tmin': 0, 'tmax': 0.5, 'reject': reject}
 
+refs = ('bip', 'avg')
+
+lengths_str = ['250ms', '500ms', '1s', '2s', '4s', '8s', '16s']
+
+lengths_nr = [0.25, 0.5, 1, 2, 4, 8, 16]

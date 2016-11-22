@@ -44,7 +44,7 @@ def add_event_to_continuous(raw, epoch_length):
     marks = np.repeat(int(1), len(ev_samples))
     events = np.vstack((ev_samples, zeros, marks))
     events = np.transpose(events)
-    raw.add_events(events)
-    return raw, events
+    # raw.add_events(events)
+    return events
 
 

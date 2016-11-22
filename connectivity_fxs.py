@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
+
 def binarize(con_mat, percentile):
     values = con_mat[np.tril_indices(con_mat.shape[0])]
     per = np.percentile(values, percentile)
