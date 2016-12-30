@@ -2,7 +2,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-
 def binarize(con_mat, percentile):
     values = con_mat[np.tril_indices(con_mat.shape[0])]
     per = np.percentile(values, percentile)
@@ -57,19 +56,30 @@ def reshape_wsmi(columnas):
 
     if len(columnas.shape) > 1:
         trials = columnas.shape[1]
+        mat_out = np.empty([nb_chan, nb_chan, trials])
+        mat_out[:] = np.nan
+
+        for tr in range(trials):
+            n = 0
+            for ch1 in range(0, nb_chan):
+                for ch2 in range(ch1 + 1, nb_chan):
+                    mat_out[ch1, ch2, tr] = columnas[n, tr]
+                    mat_out[ch2, ch1, tr] = columnas[n, tr]
+                    n += 1
+
     else:
         trials = 1
 
-    mat_out = np.empty([nb_chan, nb_chan, trials])
-    mat_out[:] = np.nan
+        mat_out = np.empty([nb_chan, nb_chan])
+        mat_out[:] = np.nan
 
-    for tr in range(0, trials-1):
-        n = 0
-        for ch1 in range(0, nb_chan):
-            for ch2 in range(ch1+1, nb_chan):
-                mat_out[ch1, ch2, tr] = columnas[n, tr]
-                mat_out[ch2, ch1, tr] = columnas[n, tr]
-                n = n + 1
+        for tr in range(trials):
+            n = 0
+            for ch1 in range(0, nb_chan):
+                for ch2 in range(ch1+1, nb_chan):
+                    mat_out[ch1, ch2] = columnas[n]
+                    mat_out[ch2, ch1] = columnas[n]
+                    n += 1
 
     return np.array(mat_out), nb_chan
 

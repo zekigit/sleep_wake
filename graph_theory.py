@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import colors, cm
 import os.path as op
-from wake_sleep_info import subjects, conditions, results_path, figures_path, ch_info_path
+from wake_sleep_info import subjects, conditions, study_path
 from connectivity_fxs import binarize
 import pandas as pd
 import networkx as nx
@@ -10,19 +10,21 @@ import networkx as nx
 # Adjust display
 pd.set_option('display.expand_frame_repr', False)
 
-subj = subjects[1]
-fq = 4
+subj = 's5'
+l = '8s'
+ref = 'avg'
+fq = 7
 
 conn_files = dict()
+results_path = op.join(study_path, subj, 'results', 'pli')
+ch_path = op.join(study_path, subj, 'info')
+
 for c in conditions:
-    conn_files[c] = (np.load(op.join(results_path, 'connectivity_{}_{}.npz' .format(subj, c))))
+    conn_files[c] = (np.load(op.join(results_path, '{}_{}_{}_{}_pli.npz' .format(subj, c, ref, l))))
 
 
-ch_info = pd.read_excel(ch_info_path + subj + '.xlsx')
-channels = ch_info['Name'].map(str) + ch_info['Nr'].astype(str)
-ch_info['Electrode'] = ch_info.Name.str.cat(ch_info.Nr.astype(str))
+ch_info = pd.read_pickle('{}/{}/info/{}_{}_info_coords.pkl' .format(study_path, subj, subj, ref))
 ch_names = conn_files[c]['ch_names']
-# print(ch_info[['Area MNI Mango', 'Area Specific']])
 ch_used = ch_info[ch_info['Electrode'].isin(ch_names)]
 
 color_codes = pd.factorize(ch_used['Lobe'])[0]
@@ -48,7 +50,7 @@ for ix, c in enumerate(conditions):
     # plt.imshow(mat)
     # plt.colorbar()
 
-    bin_mat = binarize(mat, 75)
+    bin_mat = binarize(mat, 85)
 
     grafo = nx.from_numpy_matrix(bin_mat)
 
@@ -61,12 +63,7 @@ for ix, c in enumerate(conditions):
     nx.draw_networkx(grafo, node_color=color_list, ax=axes[ix], with_labels=False)
     axes[ix].set_title(conditions[ix])
 
-# nx.average_clustering(grafo)
-# nx.average_shortest_path_length(grafo)
+    print(nx.average_clustering(grafo))
+    # nx.average_shortest_path_length(grafo)
 
-test = ch_info.copy()
-
-test['natX'] = 10.0
-test['natX'][0] = 10.1
-plt.violinplot([test['natX'], test['natY']])
 

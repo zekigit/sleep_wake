@@ -7,14 +7,6 @@ from ieeg_fx import add_event_to_continuous
 import scipy.io as scio
 
 
-def read_ch_info(subj, study_path):
-    ch_info = pd.read_excel('{}/{}/info/{}_ch_info.xlsx' .format(study_path, subj, subj))
-    # channels = ch_info['Name'].map(str) + ch_info['Nr'].astype(str)
-    ch_info['Electrode'] = ch_info.Name.str.cat(ch_info.Nr.astype(str))
-    ch_info['Subj'] = subj
-    return ch_info
-
-
 def prepro(raw, new_info, anodes, cathodes):
     # raw.plot(scalings={'eeg': 100e-6}, n_channels=raw.info['nchan'])
     base = raw.copy()  # Report mne! (also del bip chans)
@@ -28,9 +20,9 @@ def prepro(raw, new_info, anodes, cathodes):
 
 
 def raw_and_powerplots(raw, scalings, fig_path):
-    raw.plot(scalings=scalings, n_channels=raw.info['nchan'])
-    plt.show()
-    input('Press Enter to continue')
+    # raw.plot(scalings=scalings, n_channels=raw.info['nchan'])
+    # plt.show()
+    # input('Press Enter to continue')
 
     power_raw = raw.plot_psd(show=False, fmax=140)
     power_raw.savefig('{}/{}_{}_{}_power' .format(fig_path, raw.info['subj'], raw.info['cond'], raw.info['ref']))
@@ -73,7 +65,7 @@ def export_fif_mlab(epochs, subj, folder):
 
     file = '{}/{}_{}_{}_{}s' . format(folder, subj, cond, ref, length)
     print('saving ' + file)
-    # scio.savemat(file, exp_data)
+    scio.savemat(file, exp_data)
     epochs.save(file + '-epo.fif')
 
 
@@ -91,35 +83,36 @@ def calc_pli(epochs, lengths_nr, folder):
             half2.times = half1.times.copy()
             epo_cat = mne.concatenate_epochs([half1, half2])
 
-        print('computing wpli - subj: %s - cond: %s - ref: %s' % (epochs.info['subj'], epochs.info['cond'], epochs.info['ref']))
-        print('len: {}  -  n trials: {}' .format(l, len(epo_cat)))
+        if l == 8:
+            print('computing wpli - subj: %s - cond: %s - ref: %s' % (epochs.info['subj'], epochs.info['cond'], epochs.info['ref']))
+            print('len: {}  -  n trials: {}' .format(l, len(epo_cat)))
 
-        if l == 0.25:
-            fmin = (7, 10, 13, 30, 60, 110)
-            fmax = (10, 13, 30, 48, 90, 140)
+            if l == 0.25:
+                fmin = (7, 10, 13, 30, 60, 110)
+                fmax = (10, 13, 30, 48, 90, 140)
 
-        con, freqs, times, n_epochs, n_tapers = mne.connectivity.spectral_connectivity(epo_cat, method='wpli',
-                                                                                       sfreq=epo_cat.info['sfreq'],
-                                                                                       mode='multitaper', fmin=fmin,
-                                                                                       fmax=fmax, faverage=True,
-                                                                                       mt_adaptive=False, n_jobs=4,
-                                                                                       verbose=False)
-        con_mat = np.copy(con)
+            con, freqs, times, n_epochs, n_tapers = mne.connectivity.spectral_connectivity(epo_cat, method='wpli',
+                                                                                           sfreq=epo_cat.info['sfreq'],
+                                                                                           mode='multitaper', fmin=fmin,
+                                                                                           fmax=fmax, faverage=True,
+                                                                                           mt_adaptive=False, n_jobs=2,
+                                                                                           verbose=False)
+            con_mat = np.copy(con)
 
-        upper = np.triu_indices_from(con_mat[:, :, 0])
-        for fq in range(len(freqs)):
-            swap = np.swapaxes(con_mat[:, :, fq], 0, 1)
-            for val in zip(upper[0], upper[1]):
-                con_mat[:, :, fq][val] = swap[val]
+            upper = np.triu_indices_from(con_mat[:, :, 0])
+            for fq in range(len(freqs)):
+                swap = np.swapaxes(con_mat[:, :, fq], 0, 1)
+                for val in zip(upper[0], upper[1]):
+                    con_mat[:, :, fq][val] = swap[val]
 
-        ch_names = epochs.info['ch_names']
-        pli_results = dict(con_tril=con, freqs=freqs, n_epochs=n_epochs, n_tapers=n_tapers, con_mat=con_mat, ch_names=ch_names,
-                           subj=epochs.info['subj'], cond=epochs.info['cond'], ref=epochs.info['ref'], len=l)
+            ch_names = epochs.info['ch_names']
+            pli_results = dict(con_tril=con, freqs=freqs, n_epochs=n_epochs, n_tapers=n_tapers, con_mat=con_mat, ch_names=ch_names,
+                               subj=epochs.info['subj'], cond=epochs.info['cond'], ref=epochs.info['ref'], len=l)
 
-        print('saving')
-        np.savez('{}/{}_{}_{}_{}s_pli' .format(folder, pli_results['subj'], pli_results['cond'], pli_results['ref'], pli_results['len']),
-                 con_tril=con, freqs=freqs, n_epochs=n_epochs, n_tapers=n_tapers, con_mat=con_mat, ch_names=ch_names,
-                 subj=epochs.info['subj'], cond=epochs.info['cond'], ref=epochs.info['ref'], len=l)
+            print('saving')
+            np.savez('{}/{}_{}_{}_{}s_pli' .format(folder, pli_results['subj'], pli_results['cond'], pli_results['ref'], pli_results['len']),
+                     con_tril=con, freqs=freqs, n_epochs=n_epochs, n_tapers=n_tapers, con_mat=con_mat, ch_names=ch_names,
+                     subj=epochs.info['subj'], cond=epochs.info['cond'], ref=epochs.info['ref'], len=l)
 
 
 def plot_connectivity(pli_results):
