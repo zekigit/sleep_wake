@@ -10,10 +10,10 @@ import networkx as nx
 # Adjust display
 pd.set_option('display.expand_frame_repr', False)
 
-subj = 's5'
+subj = 's2'
 l = '8s'
 ref = 'avg'
-fq = 7
+
 
 conn_files = dict()
 results_path = op.join(study_path, subj, 'results', 'pli')
@@ -42,28 +42,40 @@ for c in sorted(color_codes):
 ColorLegend = {'Frontal': 0, 'Parietal': 1, 'Temporal': 2}
 
 
-fig_comp, axes = plt.subplots(1, 2)
+# Binarize
+vals = list()
+matrices = list()
+for c in conn_files:
+    matrices.append(conn_files[c]['con_mat'])
+    vals.append(conn_files[c]['con_mat'][np.tril_indices(conn_files[c]['con_mat'].shape[0], k=-1)])
 
-for ix, c in enumerate(conditions):
-    con_mat = conn_files[c]['con_mat']
-    mat = con_mat[:,:,fq]
-    # plt.imshow(mat)
-    # plt.colorbar()
-
-    bin_mat = binarize(mat, 85)
-
-    grafo = nx.from_numpy_matrix(bin_mat)
-
-    for nd in range(len(grafo)):
-        grafo.node[ix]['spear'] = ch_info['Name'].loc[ix]
-        grafo.node[ix]['electrode'] = ch_info['Electrode'].loc[ix]
-        grafo.node[ix]['lobe'] = ch_info['Lobe'].loc[ix]
-        grafo.node[ix]['matter'] = ch_info['White Grey'].loc[ix]
-
-    nx.draw_networkx(grafo, node_color=color_list, ax=axes[ix], with_labels=False)
-    axes[ix].set_title(conditions[ix])
-
-    print(nx.average_clustering(grafo))
-    # nx.average_shortest_path_length(grafo)
+all_vals = np.vstack((vals[0], vals[1]))
+thresholds = np.median(all_vals, axis=0) + np.std(all_vals, axis=0)
 
 
+fig_comp, axes = plt.subplots(4, 2)
+
+for f in range(4):
+    for ix, c in enumerate(conditions):
+        con_mat = conn_files[c]['con_mat']
+        mat = con_mat[:-1, :-1, f]
+        # plt.imshow(mat)
+        # plt.colorbar()
+
+        bin_mat = binarize(mat, value=thresholds[f])
+
+        grafo = nx.from_numpy_matrix(bin_mat)
+
+        for nd in range(len(grafo)):
+            grafo.node[nd]['spear'] = ch_info['Name'].iloc[nd]
+            grafo.node[nd]['electrode'] = ch_info['Electrode'].iloc[nd]
+            grafo.node[nd]['lobe'] = ch_info['Lobe'].iloc[nd]
+            grafo.node[nd]['matter'] = ch_info['White Grey'].iloc[nd]
+
+        nx.draw_networkx(grafo, node_color=color_list, ax=axes[f, ix], with_labels=False)
+        axes[f, ix].set_title(conditions[ix])
+
+        print(nx.average_clustering(grafo))
+        # nx.average_shortest_path_length(grafo)
+
+# chinfo y mat no coinciden!!

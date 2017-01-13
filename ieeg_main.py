@@ -17,7 +17,7 @@ os.chdir(study_path)
 
 
 def ieeg_main(subj, cond):
-    data_file = '{}/{}/data/raw/{}_{}.set' .format(study_path, subj, subj, cond)
+    data_file = '{}/{}/data/raw/{}_SEEG_{}.set' .format(study_path, subj, subj, cond)
     fig_path = '{}/{}/figures' .format(study_path, subj)
     res_path = '{}/{}/results' .format(study_path, subj)
 

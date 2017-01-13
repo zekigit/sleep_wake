@@ -2,12 +2,18 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-def binarize(con_mat, percentile):
-    values = con_mat[np.tril_indices(con_mat.shape[0])]
-    per = np.percentile(values, percentile)
+def binarize(con_mat, percentile=None, sd=None, value=None):
+    values = con_mat[np.tril_indices(con_mat.shape[0], k=-1)]
+    if percentile:
+        val = np.percentile(values, percentile)
+    if sd:
+        val = np.median(values) + sd*np.std(values)
+    if value:
+        val = value
+
     adj_mat_bin = np.copy(con_mat)
-    adj_mat_bin[adj_mat_bin < per] = int(0)
-    adj_mat_bin[adj_mat_bin >= per] = int(1)
+    adj_mat_bin[adj_mat_bin < val] = int(0)
+    adj_mat_bin[adj_mat_bin >= val] = int(1)
     return adj_mat_bin
 
 
@@ -36,6 +42,11 @@ def create_con_mat(con, freqs):
 
 
 def make_bnw_nodes(file_nodes, channels, colors, sizes):
+    if isinstance(colors, float):
+        colors = [colors] * len(channels)
+    if isinstance(sizes, float):
+        sizes = [sizes] * len(channels)
+
     nodes = np.column_stack((channels, sizes, colors))
     np.savetxt(file_nodes, nodes, delimiter='\t')
 

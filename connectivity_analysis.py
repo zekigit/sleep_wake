@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import scipy.signal as sps
 from wake_sleep_info import study_path, conditions, refs, lengths_str
-from connectivity_fxs import loadmat, reshape_wsmi
+from connectivity_fxs import loadmat, reshape_wsmi, make_bnw_nodes
 from mpl_toolkits.axes_grid1 import ImageGrid
 from ieeg_fx import load_pli, calc_electrode_dist
 
@@ -36,7 +36,7 @@ def plot_pli_violin_all(subj):
         fig, axes = plt.subplots(nrows=2, ncols=7, figsize=(20, 10), sharex=True, sharey=True)
         for ix_c, c in enumerate(conditions):
             for ix_l, l in enumerate(lengths_str):
-                con, con_mat, freqs, n_ch, con_tril, pos = load_pli(study_path, subj, c, ref, l)
+                con, con_mat, con_tril, freqs, n_ch, ch_names, pos = load_pli(study_path, subj, c, ref, l)
                 # Violin Plot
                 axes[ix_c, ix_l].violinplot(con_tril, pos, widths=1, showmeans=True, showextrema=True, showmedians=False,
                                             vert=False, bw_method='silverman')
@@ -49,7 +49,7 @@ def plot_pli_violin(subj, ref, l):
     print('pli violin')
     fig, axes = plt.subplots(nrows=2, ncols=1, figsize=(5, 5), sharex=True, sharey=True)
     for ix_c, c in enumerate(conditions):
-            con, con_mat, freqs, n_ch, con_tril, pos = load_pli(study_path, subj, c, ref, l)
+            con, con_mat, con_tril, freqs, n_ch, ch_names, pos = load_pli(study_path, subj, c, ref, l)
 
             # Violin Plot
             axes[ix_c].violinplot(con_tril, pos, widths=1, showmeans=True, showextrema=True, showmedians=False,
@@ -79,7 +79,7 @@ def plot_matrix_pli(subj, conds, ref, l):
     plt.style.use('classic')
     print('pli matrix')
     for c in conds:
-        con, con_mat, freqs, n_ch, con_tril, pos = load_pli(study_path, subj, c, ref, l)
+        con, con_mat, con_tril, freqs, n_ch, ch_names, pos = load_pli(study_path, subj, c, ref, l)
 
         # Matrix Plot
         titles = ['delta', 'theta', 'alpha l ', 'alpha h', 'beta', 'gamma l', 'gamma m', 'gamma h']
@@ -140,7 +140,7 @@ def pli_by_distance(subj, ref, win):
     dists = np.array(distances)
     dists /= 10  # cm
     for c in conditions:
-        con, con_mat, freqs, n_ch, con_tril, pos = load_pli(study_path, subj, c, ref, win)
+        con, con_mat, con_tril, freqs, n_ch, ch_names, pos = load_pli(study_path, subj, c, ref, win)
 
         titles = ['delta', 'theta', 'alpha l ', 'alpha h', 'beta', 'gamma l', 'gamma m', 'gamma h']
         plt.style.use('classic')
@@ -149,10 +149,11 @@ def pli_by_distance(subj, ref, win):
         for idx, ax in enumerate(axes):
             ax.scatter(dists, con_tril[idx])
             ax.set_title(titles[idx])
+            ax.set_ylim([0, 1])
 
         # cb = con_fig.colorbar(im, cax=grid.cbar_axes[0])
         # cb.ax.set_title('wPLI', loc='right')
-        con_fig.savefig('{}/{}/figures/{}_{}_{}_pli_{}_conmat.eps' .format(study_path, subj, subj, c, ref, win), format='eps', dpi=300)
+        con_fig.savefig('{}/{}/figures/{}_{}_{}_pli_dist_{}_conmat.eps' .format(study_path, subj, subj, c, ref, win), format='eps', dpi=300)
 
 
 def plot_da(subj):
@@ -167,15 +168,23 @@ def plot_da(subj):
         axes[ix].set_title(c)
         axes[ix].set_ylim([2, 8])
 
+
+def create_node_file(subj, ref):
+    ch_info = pd.read_pickle('{}/{}/info/{}_{}_info_coords.pkl' .format(study_path, subj, subj, ref))
+    coords = ch_info[['natX', 'natY', 'natZ']].values
+    node_file = '{}/{}/info/{}_{}_nodes.node' .format(study_path, subj, subj, ref)
+    make_bnw_nodes(file_nodes=node_file, channels=coords, colors=1.0, sizes=0.5)
+
+
 if __name__ == '__main__':
     for s in ['s5']:
-        for r in ['avg', 'bip']:
+        for r in ['avg']:
             print('Subject: {}' .format(s))
 
             # plot_pli_violin_all(s)
             # plot_pli_violin(s, r, '8s')
             # plot_matrix_pli(s, conditions, r, '8s')
-            # pli_by_distance(s, r, '8s')
+            pli_by_distance(s, r, '8s')
             # plot_smi_violin_all(s)
-            plot_smi_violin(s, r, '500ms')
+            # plot_smi_violin(s, r, '500ms')
             # plot_matrix_smi(s, conditions, r, '500ms')

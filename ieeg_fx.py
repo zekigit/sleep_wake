@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.spatial import distance
-
+from mpl_toolkits.mplot3d import Axes3D
 
 def check_channels(ch_info, raw):
     indexes = list()
@@ -134,6 +134,7 @@ def load_pli(study_path, subj, cond, ref, win):
     con_mat = data['con_mat'][:-1, :-1, :]
     freqs = len(data['freqs'])
     n_ch = len(data['ch_names']) - 1
+    ch_names = data['ch_names'][:-1]
 
     con = con[np.tril_indices(n_ch, k=-1)]
 
@@ -144,7 +145,7 @@ def load_pli(study_path, subj, cond, ref, win):
         pos = [3, 4, 5, 6, 7, 8]
     else:
         pos = [1, 2, 3, 4, 5, 6, 7, 8]
-    return con, con_mat, freqs, n_ch, con_tril, pos
+    return con, con_mat, con_tril, freqs, n_ch, ch_names, pos
 
 
 def calc_electrode_dist(ch_info):
