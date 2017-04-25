@@ -1,8 +1,10 @@
-subjects = ('P8', 'P9', 'P14', 'P15', 'P5')
+subjects = ('P8', 'P9', 'P14', 'P16', 'P5')
 
 IDs = ('s1', 's2', 's3', 's4', 's5')
 
 conditions = ['wake', 'sleep']
+
+n_jobs = 2
 
 conds_x_subj = {'s1': ('wake', 'sleep'),
                 's2': ('wake', 'sleep'),  # also 'transition'
@@ -26,4 +28,13 @@ lengths_str = ['250ms', '500ms', '1s', '2s', '4s', '8s', '16s']
 
 lengths_nr = [0.25, 0.5, 1, 2, 4, 8, 16]
 
-bad_channels_scalp = {'s5': dict(wake=[1, 9, 30, 32, 35, 45, 46, 54, 58, 176, 199, 218, 219], sleep=[31, 37, 45, 94, 103, 111, 176, 199, 218, 219])}
+bad_channels_scalp = {'s5': dict(wake=[1, 9, 30, 32, 35, 45, 46, 54, 58, 113, 176, 189,  199, 218, 219],
+                                 sleep=[31, 37, 45, 94, 103, 111, 113, 176, 189,  199, 218, 219])}
+
+bad_channels_ieeg = {'s1': [],
+                     's2': [],
+                     's3': [],
+                     's4': [113, 114, 115, 116]}
+
+
+frequencies = ['delta', 'theta', 'alpha-L', 'alpha-H', 'beta', 'gamma-L', 'gamma-M', 'gamma-H']

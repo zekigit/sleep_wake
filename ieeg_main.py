@@ -17,7 +17,7 @@ os.chdir(study_path)
 
 
 def ieeg_main(subj, cond):
-    data_file = '{}/{}/data/raw/{}_SEEG_{}.set' .format(study_path, subj, subj, cond)
+    data_file = '{}/{}/data/raw/{}_{}.set' .format(study_path, subj, subj, cond)
     fig_path = '{}/{}/figures' .format(study_path, subj)
     res_path = '{}/{}/results' .format(study_path, subj)
 
@@ -38,8 +38,8 @@ def ieeg_main(subj, cond):
 
     raw_bip.info['bads'] = bip_info['Electrode'][bip_info['White Grey'] != 'Grey Matter'].tolist()
 
-    for r in [raw_bip, raw_avg]:
-        raw_and_powerplots(r, scalings, fig_path)
+#    for r in [raw_bip, raw_avg]:
+#        raw_and_powerplots(r[0], scalings, fig_path)
 
     epo_avg = cut_epochs(raw_avg)
     epo_bip = cut_epochs(raw_bip)
@@ -48,7 +48,7 @@ def ieeg_main(subj, cond):
     bip_info.to_pickle(os.path.join(study_path, subj, 'info', '{}_bip_info_coords.pkl'.format(subj)))
 
     for epo in epo_avg + epo_bip:
-        pli_results = calc_pli(epo, lengths_nr=lengths_nr, folder='{}/pli' .format(res_path))
+        # pli_results = calc_pli(epo, lengths_nr=lengths_nr, folder='{}/pli' .format(res_path))
         export_fif_mlab(epo, subj, folder='{}/{}/data/epochs' .format(study_path, subj))
     return
 
@@ -56,4 +56,4 @@ conditions = ['wake', 'sleep']
 
 if __name__ == '__main__':
     for c in conditions:
-        ieeg_main('s5', c)
+        ieeg_main('s4', c)

@@ -3,8 +3,9 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import ImageGrid
-from ieeg_fx import add_event_to_continuous
+from ieeg_fx import add_event_to_continuous, ch_info_coords
 import scipy.io as scio
+import os.path as op
 
 
 def prepro(raw, new_info, anodes, cathodes):
@@ -23,8 +24,9 @@ def raw_and_powerplots(raw, scalings, fig_path):
     # raw.plot(scalings=scalings, n_channels=raw.info['nchan'])
     # plt.show()
     # input('Press Enter to continue')
-
-    power_raw = raw.plot_psd(show=False, fmax=140)
+    power_fig, ax = plt.figure()
+    power_raw = raw.plot_psd(show=False, fmax=140, ax=ax)
+    ax.set_ylim([-160, -90])
     power_raw.savefig('{}/{}_{}_{}_power' .format(fig_path, raw.info['subj'], raw.info['cond'], raw.info['ref']))
     pass
 
@@ -56,7 +58,8 @@ def export_fif_mlab(epochs, subj, folder):
                     sfreq=epochs.info['sfreq'],
                     subj=subj,
                     ref=ref,
-                    ch_names=epochs.info['ch_names'])
+                    ch_names=epochs.info['ch_names'],
+                    cond=cond)
 
     if length == '0.5':
         length = '500m'
@@ -150,6 +153,11 @@ def crop_and_order_epochs(epochs):
     pass
 
 
+def make_chan_file(subj, study_path):
+    ch_info = ch_info_coords(subj, study_path)
+    ch_info.to_pickle(op.join(study_path, subj, 'info', '{}_avg_info_coords.pkl' .format(subj)))
+
+
 def calc_ati(epochs):
     pass
 
@@ -157,4 +165,12 @@ def calc_ati(epochs):
 def calc_criticality(data):
     pass
 
+
+def plot_power_fig(epochs):
+    power_fig, ax = plt.subplots(1, 1)
+    epochs.plot_psd(show=False, fmax=140, ax=ax)
+    ax.set_ylim([-160, -90])
+    return power_fig
+
+# power_raw.savefig('{}/{}_{}_{}_power_epo'.format(fig_path, raw.info['subj'], raw.info['cond'], raw.info['ref']))
 

@@ -1,15 +1,23 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import networkx as nx
+import mne
+from scipy.fftpack import rfft, irfft
+from scipy import stats
+import pandas as pd
 
 
 def binarize(con_mat, percentile=None, sd=None, value=None):
     values = con_mat[np.tril_indices(con_mat.shape[0], k=-1)]
     if percentile:
         val = np.percentile(values, percentile)
-    if sd:
+    elif sd:
         val = np.median(values) + sd*np.std(values)
-    if value:
+    elif value:
         val = value
+    else:
+        print('You should specify a threshold')
+        return
 
     adj_mat_bin = np.copy(con_mat)
     adj_mat_bin[adj_mat_bin < val] = int(0)
@@ -41,19 +49,70 @@ def create_con_mat(con, freqs):
     return con_mat
 
 
-def make_bnw_nodes(file_nodes, channels, colors, sizes):
+def make_bnw_nodes(file_nodes, coords, colors, sizes):
     if isinstance(colors, float):
-        colors = [colors] * len(channels)
+        colors = [colors] * len(coords)
     if isinstance(sizes, float):
-        sizes = [sizes] * len(channels)
+        sizes = [sizes] * len(coords)
 
-    nodes = np.column_stack((channels, sizes, colors))
+    nodes = np.column_stack((coords, colors, sizes))
     np.savetxt(file_nodes, nodes, delimiter='\t')
 
 
 def make_bnw_edges(file_nodes, adj_mats, titles):
     for idx, fq in enumerate(range(adj_mats.shape[2])):
         np.savetxt(file_nodes + titles[idx] + '.edge', adj_mats[:, :, idx], delimiter='\t')
+
+
+def find_threshold(mat):
+    values = mat[np.tril_indices(mat.shape[0], k=-1)]
+    median = np.median(values)
+    sd = np.std(values)
+    threshold = median + sd
+    hist = plt.hist(values)
+    plt.vlines(threshold, ymin=0, ymax=max(hist[0]))
+    return threshold
+
+
+def binarize_mat(mat, threshold):
+    bin_mat = mat.copy()
+    bin_mat[bin_mat > threshold] = 1
+    bin_mat[bin_mat < threshold] = 0
+
+    return bin_mat
+
+
+def graph_threshold(mat, steps):
+    avgs = np.empty((len(steps)))
+    sems = np.empty((len(steps)))
+    vals = list()
+
+    for ix, s in enumerate(steps):
+        copy_mat = mat.copy()
+        copy_mat[copy_mat > s] = 1
+        copy_mat[copy_mat < s] = 0
+        graph = nx.from_numpy_matrix(copy_mat)
+        degs = np.array(list(graph.degree().values()))/len(graph)
+        avgs[ix] = np.average(degs)
+        sems[ix] = np.std(degs)
+        vals.extend(degs)
+    df_deg = {'Degree': vals}
+    deg_df = pd.DataFrame(df_deg)
+    # plt.plot(steps, avgs)
+    return avgs, sems, deg_df
+
+
+def calc_graph_metrics(bin_mat, ch_names):
+    graph = nx.from_numpy_matrix(bin_mat)
+    for ix, n in enumerate(graph):
+        graph.node[ix] = ch_names[ix]
+
+    degree = graph.degree()
+    # nx.draw_networkx(graph, with_labels=True)
+    # nx.draw(graph)
+    clustering = nx.clustering(graph)
+    # avg_path_length = nx.average_shortest_path_length(graph)
+    return clustering, degree, graph
 
 
 def reshape_wsmi(columnas):
@@ -95,6 +154,36 @@ def reshape_wsmi(columnas):
     return np.array(mat_out), nb_chan
 
 
+def phase_scramble_ts(ts):
+    """Returns a TS: original TS power is preserved; TS phase is shuffled."""
+    fs = rfft(ts)
+    # rfft returns real and imaginary components in adjacent elements of a real array
+    pow_fs = fs[1:-1:2]**2 + fs[2::2]**2
+    phase_fs = np.arctan2(fs[2::2], fs[1:-1:2])
+    phase_fsr = phase_fs.copy()
+    np.random.shuffle(phase_fsr)
+    # use broadcasting and ravel to interleave the real and imaginary components.
+    # The first and last elements in the fourier array don't have any phase information, and thus don't change
+    fsrp = np.sqrt(pow_fs[:, np.newaxis]) * np.c_[np.cos(phase_fsr), np.sin(phase_fsr)]
+    fsrp = np.r_[fs[0], fsrp.ravel(), fs[-1]]
+    tsr = irfft(fsrp)
+    return tsr
+
+
+def randomize_epochs_phase(epochs):
+    dat = epochs.get_data()
+    if dat.shape[2] & 0x1:
+        dat = dat[:, :, :-1]
+
+    shuf_dat = np.empty(dat.shape)
+    for ix_e, e in enumerate(dat):
+        for ix_ch, ch in enumerate(e):
+            shuf_signal = phase_scramble_ts(ch)
+            shuf_dat[ix_e, ix_ch, :] = shuf_signal
+    shuf_epo = mne.EpochsArray(shuf_dat, epochs.info)
+    return shuf_epo
+
+
 import scipy.io as spio
 
 
@@ -133,52 +222,3 @@ def _todict(matobj):
 
 
 
-import neo
-import numpy as np
-import mne
-
-# Example
-# dirname = './data_Micromed/'
-# trc_filename = 'EEG_33.TRC'
-# fname = os.path.join(dirname, trc_filename)
-
-def raw_from_neo(fname):
-    seg_micromed = neo.MicromedIO(filename=fname).read_segment()
-
-    ch_names = [sig.name for sig in seg_micromed.analogsignals]
-
-    # Because here we have the same on all chan
-    sfreq = seg_micromed.analogsignals[0].sampling_rate
-
-    data = np.asarray(seg_micromed.analogsignals)
-    data *= 1e-6  # putdata from microvolts to volts
-    # add stim channel
-    ch_names.append('STI 014')
-    data = np.vstack((data, np.zeros((1, data.shape[1]))))
-
-    # To get sample number:
-    events_time = seg_micromed.eventarrays[0].times.magnitude * sfreq
-    n_events = len(events_time)
-    events = np.empty([n_events, 3])
-    events[:, 0] = events_time
-    events[:, 2] = seg_micromed.eventarrays[0].labels.astype(int)
-
-    ch_types = ['eog', 'eog'] + ['eeg' for _ in ch_names[2:-1]] + ['stim']
-    info = mne.create_info(ch_names, sfreq, ch_types=ch_types)
-
-    raw = mne.io.RawArray(data, info)
-    raw.add_events(events)
-    return raw
-
-
-def discrete_cmap(N, base_cmap=None):
-    """Create an N-bin discrete colormap from the specified input map"""
-
-    # Note that if base_cmap is a string or None, you can simply do
-    #    return plt.cm.get_cmap(base_cmap, N)
-    # The following works for string, None, or a colormap instance:
-
-    base = plt.cm.get_cmap(base_cmap)
-    color_list = base(np.linspace(0, 1, N))
-    cmap_name = base.name + str(N)
-    return base.from_list(cmap_name, color_list, N)
