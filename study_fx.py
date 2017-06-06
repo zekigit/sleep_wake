@@ -6,7 +6,7 @@ from mpl_toolkits.axes_grid1 import ImageGrid
 from ieeg_fx import add_event_to_continuous, ch_info_coords
 import scipy.io as scio
 import os.path as op
-
+from scipy.stats import ttest_ind
 
 def prepro(raw, new_info, anodes, cathodes):
     # raw.plot(scalings={'eeg': 100e-6}, n_channels=raw.info['nchan'])
@@ -174,3 +174,19 @@ def plot_power_fig(epochs):
 
 # power_raw.savefig('{}/{}_{}_{}_power_epo'.format(fig_path, raw.info['subj'], raw.info['cond'], raw.info['ref']))
 
+
+def permutation_t_test(a, b, n_perm):
+    t_real, p_real = ttest_ind(a, b, equal_var=False)
+
+    t_list = list()
+    for per in range(int(n_perm)):
+        joint = np.concatenate((a, b))
+        np.random.shuffle(joint)
+        split = np.array_split(joint, 2)
+        t_perm, p_perm = ttest_ind(split[0], split[1], equal_var=False)
+        t_list.append(t_perm)
+    if t_real > 0:
+        p_permuted = len(np.where(t_list > t_real)[0]) / n_perm
+    else:
+        p_permuted = len(np.where(t_list < t_real)[0]) / n_perm
+    return t_real, t_list, p_permuted

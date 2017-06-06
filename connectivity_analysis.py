@@ -4,12 +4,15 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import scipy.signal as sps
 import scipy.io as scio
+import mne
 from scipy import stats
-from wake_sleep_info import study_path, conditions, refs, lengths_str, frequencies
+from wake_sleep_info import study_path, conditions, refs, lengths_str, frequencies, n_jobs
 from connectivity_fxs import loadmat, reshape_wsmi, make_bnw_nodes, find_threshold, binarize_mat, calc_graph_metrics, graph_threshold
 from mpl_toolkits.axes_grid1 import ImageGrid
 from ieeg_fx import load_pli_ieeg, calc_electrode_dist, load_pli, select_gm_chans
-
+from mne.time_frequency import psd_multitaper
+from study_fx import permutation_t_test
+from statsmodels.sandbox.stats.multicomp import multipletests
 
 # Adjust display
 pd.set_option('display.expand_frame_repr', False)
@@ -377,7 +380,7 @@ def export_deg_table(subj, ref):
 
             node_file = '{}/{}/results/graph_theory/{}_{}_{}_{}_nodes_avgPLI.node'.format(study_path, subj, subj, ref, c, f)
             ch_avg = np.mean(gm_mat, axis=1)
-            ch_avg = np.append(ch_avg, np.array([[0], [1]]))
+            ch_avg = np.append(ch_avg, np.array([[0], [0.7]]))
             colors = list(ch_avg)
             make_bnw_nodes(node_file, coords_add, colors, sizes)
 
@@ -518,6 +521,57 @@ def conn_hfo_analysis(subj):
         # fig.savefig('{}/{}/figures/{}_{}_hfo_wpli_regr_pairs.eps' .format(study_path, subj, subj, c), format='eps', dpi=300)
 
 
+def power_analysis(subj):
+    cond_data = list()
+    n_perm = 10e3
+    for c in conditions:
+        file = op.join(study_path, subj, 'data', 'epochs', '{}_{}_avg_16s-epo.fif' .format(subj, c))
+        epochs = mne.read_epochs(file)
+        picks = mne.pick_types(epochs.info, eeg=True, exclude='bads')
+        psds, freqs = psd_multitaper(epochs, fmin=1, fmax=120, picks=picks, n_jobs=n_jobs)
+
+        # fmin = (1, 4, 7, 10, 13, 30, 60, 90)
+        # fmax = (4, 7, 10, 13, 30, 60, 90, 120)
+
+        fmin = (1, 4, 7, 10, 13, 30, 60, 90)
+        fmax = (4, 7, 10, 13, 30, 60, 90, 120)
+
+        fq_dat = list()
+        for f_mi, f_ma in zip(fmin, fmax):
+            print(f_mi, f_ma)
+            fq_mask = (freqs >= f_mi) & (freqs <= f_ma)
+            fq_pow = psds[:, :, fq_mask].mean(2)
+            fq_dat.append(fq_pow)
+
+        fq_dat_mat = np.stack(fq_dat, axis=2)
+        cond_data.append(fq_dat_mat)
+
+    gammas = frequencies[-3:]
+    cond_data[0] = cond_data[0][:, :, -3:]
+    cond_data[1] = cond_data[1][:, :, -3:]
+
+    pow_fig, axes = plt.subplots(2, len(gammas), sharey='row', sharex='row')
+    pow_fig.subplots_adjust(wspace=0)
+    p_vals = list()
+    for ix, f in enumerate(gammas):
+        wake_dat = np.mean(cond_data[0][:, :, ix], 1)
+        sleep_dat = np.mean(cond_data[1][:, :, ix], 1)
+        axes[0, ix].violinplot([wake_dat, sleep_dat], showmeans=True)
+        axes[0, ix].set_yscale('log')
+        t_real, t_list, p_permuted = permutation_t_test(wake_dat, sleep_dat, n_perm)
+        p_vals.append(p_permuted)
+        axes[1, ix].hist(t_list, bins=100, facecolor='black')
+        axes[1, ix].vlines(t_real, ymin=0, ymax=400, linestyles='--')
+    # epochs.plot(scalings={'eeg': 120e-5}, n_channels=epochs.info['nchan'], n_epochs=1)
+
+    p_vals_corr = multipletests(p_vals, 0.05, 'holm')[1]
+    for ax in range(len(gammas)):
+        axes[0, ax].set_title(p_vals_corr[ax])
+
+    print(p_vals_corr)
+    pow_fig.savefig('{}/{}/figures/{}_gamma_pow_fig.eps' .format(study_path, subj, subj), format='eps', dpi=300)
+
+
 if __name__ == '__main__':
     for s in ['s1', 's2', 's3']:
         for r in ['avg']:
@@ -538,5 +592,6 @@ if __name__ == '__main__':
             # create_edge_file(s, r, c)
             # create_graph_nodes(s, r, c)
             # plot_da(s)
-        export_deg_table(s, r)
+        #export_deg_table(s, r)
         # conn_hfo_analysis(s)
+        power_analysis(s)
