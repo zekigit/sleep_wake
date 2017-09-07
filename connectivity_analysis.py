@@ -7,12 +7,14 @@ import scipy.io as scio
 import mne
 from scipy import stats
 from wake_sleep_info import study_path, conditions, refs, lengths_str, frequencies, n_jobs
-from connectivity_fxs import loadmat, reshape_wsmi, make_bnw_nodes, find_threshold, binarize_mat, calc_graph_metrics, graph_threshold
+from connectivity_fxs import loadmat, reshape_wsmi, make_bnw_nodes, find_threshold, binarize_mat, calc_graph_metrics, graph_threshold, \
+    d3_scale
 from mpl_toolkits.axes_grid1 import ImageGrid
 from ieeg_fx import load_pli_ieeg, calc_electrode_dist, load_pli, select_gm_chans
 from mne.time_frequency import psd_multitaper
 from study_fx import permutation_t_test
 from statsmodels.sandbox.stats.multicomp import multipletests
+from collections import OrderedDict
 
 # Adjust display
 pd.set_option('display.expand_frame_repr', False)
@@ -125,6 +127,59 @@ def plot_matrix_pli(subj, conds, ref, l):
         cb = con_fig.colorbar(im, cax=grid.cbar_axes[0])
         cb.ax.set_title('wPLI', loc='right')
         con_fig.savefig('{}/{}/figures/{}_{}_{}_pli_{}_conmat.eps' .format(study_path, subj, subj, c, ref, l), format='eps', dpi=300)
+
+
+def plot_matrix_pli_anotomical(subj, conds, ref, l):
+    plt.style.use('classic')
+    print('pli matrix anatomical')
+    lobes_labels = ['Frontal', 'Temporal', 'Parietal', 'Occipital']
+
+    for c in conds:
+        con, con_mat, con_tril, freqs, n_ch, ch_names, pos = load_pli_ieeg(study_path, subj, c, ref, l)
+
+        gm_chans, gm_names, gm_ch_info = select_gm_chans(subj, ref, study_path, ch_names)
+
+        # sort by anatomy
+        gm_ch_info['Original_ix'] = np.arange(0, len(gm_ch_info))
+
+        lobes = [x[1] for x in gm_ch_info['Lobe'].str.split().tolist()]
+        gm_ch_info['LobePlot'] = pd.Categorical(lobes, lobes_labels)
+        gm_ch_info_ordered = gm_ch_info.sort_values(by=['LobePlot', 'Electrode'])
+
+        reorder_ix = np.array(gm_ch_info_ordered.Original_ix.tolist())
+        lobe_division = [ix for ix, x in enumerate(gm_ch_info_ordered.LobePlot.tolist()) if
+                         (ix < len(gm_ch_info_ordered.LobePlot)-2) and (
+                         gm_ch_info_ordered.LobePlot.iloc[ix] != gm_ch_info_ordered.LobePlot.iloc[ix+1])]
+
+        # Matrix Plot
+        titles = ['delta', 'theta', 'alpha l ', 'alpha h', 'beta', 'gamma l', 'gamma m', 'gamma h']
+        con_fig = plt.figure(figsize=(20, 3))
+        grid = ImageGrid(con_fig, 111,
+                         nrows_ncols=(1, 8),
+                         axes_pad=0.3,
+                         cbar_mode='single',
+                         cbar_pad='15%',
+                         cbar_location='right')
+
+        for idx, ax in enumerate(grid):
+            con_gm = con_mat[gm_chans[:, None], gm_chans, idx]
+            con_gm_ordered = con_gm[reorder_ix][:, reorder_ix]
+
+            im = ax.imshow(con_gm_ordered, vmin=0, vmax=1, cmap='magma')
+            ax.vlines(lobe_division, ymin=ax.get_ylim()[0], ymax=ax.get_ylim()[1])
+            ax.hlines(lobe_division, xmin=ax.get_xlim()[0], xmax=ax.get_xlim()[1])
+            ax.set_title(titles[idx])
+
+        cb = con_fig.colorbar(im, cax=grid.cbar_axes[0])
+        cb.ax.set_title('wPLI', loc='right')
+
+        print(gm_ch_info_ordered.LobePlot.unique())
+        con_fig.savefig('{}/{}/figures/{}_{}_{}_pli_{}_conmat_anatomical.eps' .format(study_path, subj, subj, c, ref, l), format='eps', dpi=300)
+
+    node_file = op.join(study_path, subj, 'info', '%s_nodes_by_lobe.node' % subj)
+    coords = gm_ch_info_ordered[['natX', 'natY', 'natZ']].values
+    colors = [1 if x == 'Frontal' else 2 if x == 'Temporal' else 3 if x == 'Parietal' else 4 for x in gm_ch_info_ordered.LobePlot.tolist()]
+    make_bnw_nodes(node_file, coords, colors, [3]*len(coords))
 
 
 def plot_matrix_smi(subj, conds, ref, l):
@@ -317,19 +372,22 @@ def export_deg_table(subj, ref):
         results.append(con_mat)
         values.append(con)
 
-    # load chans, select and order by appearance on ch_names of pli result
-    ch_info = pd.read_pickle('{}/{}/info/{}_{}_info_coords.pkl' .format(study_path, subj, subj, ref))
-    ch_info = ch_info[ch_info['Electrode'].isin(ch_names)]
-    sorter_index = dict(zip(ch_names, range(len(ch_names))))
-    ch_info['sorter'] = ch_info['Electrode'].map(sorter_index)
-    ch_info.sort_values(['sorter'], ascending=[True], inplace=True)
+    gm_chans, gm_names, gm_ch_info = select_gm_chans(subj, ref, study_path, ch_names)
+    #
+    # # load chans, select and order by appearance on ch_names of pli result
+    # ch_info = pd.read_pickle('{}/{}/info/{}_{}_info_coords.pkl' .format(study_path, subj, subj, ref))
+    # ch_info = ch_info[ch_info['Electrode'].isin(ch_names)]
+    # sorter_index = dict(zip(ch_names, range(len(ch_names))))
+    # ch_info['sorter'] = ch_info['Electrode'].map(sorter_index)
+    # ch_info.sort_values(['sorter'], ascending=[True], inplace=True)
+    #
+    # grey_matter_chans = ch_info[ch_info['White Grey'] == 'Grey Matter']
+    # gm_chans = np.array([ix for ix, ch in enumerate(ch_names) if ch in grey_matter_chans['Electrode'].values])
+    # n_gm_chans = len(gm_chans)
+    # gm_names = grey_matter_chans['Electrode'].values
 
-    grey_matter_chans = ch_info[ch_info['White Grey'] == 'Grey Matter']
-    gm_chans = np.array([ix for ix, ch in enumerate(ch_names) if ch in grey_matter_chans['Electrode'].values])
-    n_gm_chans = len(gm_chans)
-    gm_names = grey_matter_chans['Electrode'].values
-
-    coords = grey_matter_chans[['natX', 'natY', 'natZ']].values
+    # coords = grey_matter_chans[['natX', 'natY', 'natZ']].values
+    coords = gm_ch_info[['natX', 'natY', 'natZ']].values
     coords_add = np.vstack((coords, np.array([[70, 70, 70], [70, 70, 70]])))
 
     thresholds = list()
@@ -340,7 +398,8 @@ def export_deg_table(subj, ref):
         threshold = median
         thresholds.append(threshold)
 
-    bin_mats = np.empty((n_gm_chans, n_gm_chans, freqs, len(conditions)))
+    # bin_mats = np.empty((n_gm_chans, n_gm_chans, freqs, len(conditions)))
+    bin_mats = np.empty((len(gm_chans), len(gm_chans), freqs, len(conditions)))
     conds = list()
     fqs = list()
     chans = list()
@@ -372,13 +431,13 @@ def export_deg_table(subj, ref):
             deg_df['Threshold'] = np.repeat(np.arange(1,101), len(gm_chans), axis=0)
             dfs.append(deg_df)
 
-            node_file = '{}/{}/results/graph_theory/{}_{}_{}_{}_nodes_degree.node'.format(study_path, subj, subj, ref, c, f)
+            node_file = '{}/{}/results/node_files/{}_{}_{}_{}_nodes_degree.node'.format(study_path, subj, subj, ref, c, f)
             sizes = 3.0
             degree_norm = np.append(degree_norm, np.array([[0], [1]]))
             colors = list(degree_norm)
             make_bnw_nodes(node_file, coords_add, colors, sizes)
 
-            node_file = '{}/{}/results/graph_theory/{}_{}_{}_{}_nodes_avgPLI.node'.format(study_path, subj, subj, ref, c, f)
+            node_file = '{}/{}/results/node_files/{}_{}_{}_{}_nodes_avgPLI.node'.format(study_path, subj, subj, ref, c, f)
             ch_avg = np.mean(gm_mat, axis=1)
             ch_avg = np.append(ch_avg, np.array([[0], [0.7]]))
             colors = list(ch_avg)
@@ -452,73 +511,74 @@ def export_deg_table(subj, ref):
 def conn_hfo_analysis(subj):
     ref = 'avg'
     win = '8s'
+    lobes_labels = ['Frontal', 'Temporal', 'Parietal', 'Occipital']
     rec_durations = {'s1': {'wake': 23.93, 'sleep': 20.0}, 's2': {'wake': 13.33, 'sleep': 14.93}, 's3': {'wake': 24.80, 'sleep': 24.80}}
 
+    df_x_conds = list()
     for c in conditions:
         hfos = pd.read_csv('{}/{}/results/tables/{}_{}_hfo_table.csv'.format(study_path, subj, subj, c),
                            names=['channel', 'hfo_gamma', 'hfo_ripples', 'hfo_fast_ripples', 'hfo_spikes', 'hfo_other'])
 
         con, con_mat, con_tril, freqs, n_ch, ch_names, pos = load_pli_ieeg(study_path, subj, c, ref, win)
         gm_chans, gm_names, gm_ch_info = select_gm_chans(subj, ref, study_path, ch_names)
-        channels = [ch.replace('\'', '_i') for ch in gm_names]
+
+
+        # sort by anatomy
+        gm_ch_info['Original_ix'] = np.arange(0, len(gm_ch_info))
+
+        lobes = [x[1] for x in gm_ch_info['Lobe'].str.split().tolist()]
+        gm_ch_info['LobePlot'] = pd.Categorical(lobes, lobes_labels)
+        gm_ch_info_ordered = gm_ch_info.sort_values(by=['LobePlot', 'Electrode'])
+
+        reorder_ix = np.array(gm_ch_info_ordered.Original_ix.tolist())
+
+        channels = [ch.replace('\'', '_i') for ch in gm_ch_info_ordered.Electrode.tolist()]
+        # channels = [ch.replace('\'', '_i') for ch in gm_names]
         con_gm = con_mat[gm_chans[:, None], gm_chans, :]
 
-        # Channel Avergares
-        ch_avgs = np.mean(con_gm, 1)
-        conn_dat = pd.DataFrame({'channel': channels, 'delta': ch_avgs[:, 0], 'theta': ch_avgs[:, 1], 'alpha-L': ch_avgs[:, 2],
-                                 'alpha-H': ch_avgs[:, 3], 'beta': ch_avgs[:, 4], 'gamma-L': ch_avgs[:, 5], 'gamma-M': ch_avgs[:, 6],
-                                 'gamma-H': ch_avgs[:, 7]})
+        con_gm_ordered = con_gm[reorder_ix, :, :][:, reorder_ix, :]
 
-        df = pd.merge(hfos, conn_dat, on='channel')
+        if subj == 's2':
+            if c == 'wake':
+                remove = 'A10'
+            elif c == 'sleep':
+                remove = 'A6'
+            ix_remove = channels.index(remove)
+            channels.remove(remove)
+            con_gm_ordered = np.delete(np.delete(con_gm_ordered, ix_remove, axis=0), ix_remove, axis=1)
+            gm_ch_info_ordered = gm_ch_info_ordered[gm_ch_info_ordered.Electrode != remove]
+
+        # Channel Avergares
+        ch_avgs = np.mean(con_gm_ordered, 1)
+        conn_dat = pd.DataFrame(OrderedDict((('channel', channels), ('delta', ch_avgs[:, 0]), ('theta', ch_avgs[:, 1]),
+                                             ('alpha-L', ch_avgs[:, 2]), ('alpha-H', ch_avgs[:, 3]), ('beta', ch_avgs[:, 4]),
+                                             ('gamma-L', ch_avgs[:, 5]), ('gamma-M', ch_avgs[:, 6]), ('gamma-H', ch_avgs[:, 7]),
+                                             ('x', gm_ch_info_ordered.natX), ('y', gm_ch_info_ordered.natY),
+                                             ('z', gm_ch_info_ordered.natZ), ('area', gm_ch_info_ordered['Area Specific']))))
+
+        df = pd.merge(conn_dat, hfos, on='channel')
+
+        # if (subj == 's2') and (c == 'wake'):
+        #     df = df[df.channel != 'A10']
+        # elif (subj == 's2') and (c == 'sleep'):
+        #     df = df[df.channel != 'A6']
+
         df.to_csv('{}/{}/results/tables/{}_{}_regr_table.csv' .format(study_path, subj, subj, c))
 
-        # x_vals = df['hfo_{}' .format(c)].values
-        # x = x_vals / rec_durations[subj][c]
-        #
-        # fig, axes = plt.subplots(1, 8, sharex=True, sharey=True, figsize=(20, 3))
-        # for ix, f in enumerate(frequencies):
-        #     y = df[f].values
-        #     slope, intercept, r_value, p_value, std_err = stats.linregress(x, y)
-        #     pred = intercept + slope * x
-        #     axes[ix].scatter(x, y)
-        #     axes[ix].plot(x, pred, 'r-')
-        #     axes[ix].set_title('{}\n r2: {:.3f} \n p: {:.5f}' .format(f, r_value**2, p_value))
-        #     plt.setp(axes[ix].get_xticklabels(), rotation=45)
-        # fig.tight_layout()
-        # fig.savefig('{}/{}/figures/{}_{}_hfo_wpli_regr.eps' .format(study_path, subj, subj, c), format='eps', dpi=300)
-        #
-        # # Pairs
-        # tril_gm = con_gm[np.tril_indices(con_gm.shape[0], k=-1)]
-        # pairs, _, _ = calc_electrode_dist(gm_ch_info)
-        # pairs = [p.replace('\'', '_i') for p in pairs]
-        # df_pairs = pd.DataFrame({'Pair': pairs, 'delta': tril_gm[:, 0], 'theta': tril_gm[:, 1], 'alpha-L': tril_gm[:, 2],
-        #                          'alpha-H': tril_gm[:, 3], 'beta': tril_gm[:, 4], 'gamma-L': tril_gm[:, 5], 'gamma-M': tril_gm[:, 6],
-        #                          'gamma-H': tril_gm[:, 7], 'Condition': c})
-        #
-        # df_pairs['ch1'] = df_pairs.Pair.str.split(' \| ').str.get(0)
-        # df_pairs['ch2'] = df_pairs.Pair.str.split(' \| ').str.get(1)
-        # df_pairs = df_pairs.merge(hfos, how='right', left_on='ch1', right_on='channel')
-        # df_pairs.rename(columns={'hfo_wake': 'hfo_wake_ch1', 'hfo_sleep': 'hfo_sleep_ch1'}, inplace=True)
-        # df_pairs = df_pairs.merge(hfos, how='right', left_on='ch2', right_on='channel')
-        # df_pairs.rename(columns={'hfo_wake': 'hfo_wake_ch2', 'hfo_sleep': 'hfo_sleep_ch2'}, inplace=True)
-        #
-        # df_pairs['ev_sum_wake'] = (df_pairs['hfo_wake_ch1'] + df_pairs['hfo_wake_ch2']) / rec_durations[subj][c]
-        # df_pairs['ev_sum_sleep'] = (df_pairs['hfo_sleep_ch1'] + df_pairs['hfo_sleep_ch2']) / rec_durations[subj][c]
-        # df_pairs.dropna(inplace=True)
-        #
-        # x = df_pairs['ev_sum_{}' .format(c)].values
-        #
-        # fig, axes = plt.subplots(1, 8, sharex=True, sharey=True, figsize=(20, 3))
-        # for ix, f in enumerate(frequencies):
-        #     y = df_pairs[f].values
-        #     slope, intercept, r_value, p_value, std_err = stats.linregress(x, y)
-        #     pred = intercept + slope * x
-        #     axes[ix].scatter(x, y)
-        #     axes[ix].plot(x, pred, 'r-')
-        #     axes[ix].set_title('{}\n r2: {:.3f} \n p: {:.5f}' .format(f, r_value**2, p_value))
-        #     plt.setp(axes[ix].get_xticklabels(), rotation=45)
-        # fig.tight_layout()
-        # fig.savefig('{}/{}/figures/{}_{}_hfo_wpli_regr_pairs.eps' .format(study_path, subj, subj, c), format='eps', dpi=300)
+        # Export for stats and plot by areas
+        con_values = con_gm_ordered.copy()
+        [np.fill_diagonal(con_values[..., ix], np.nan) for ix in range(con_values.shape[2])]
+        con_values = np.reshape(con_values[np.where(~np.eye(con_values.shape[0], dtype=bool))],
+                                (con_values.shape[0], con_values.shape[0]-1, con_values.shape[2]))
+
+        df_cond = list()
+        for ix_f, f in enumerate(frequencies):
+            df_x_roi = pd.concat([pd.DataFrame({'channel': channels, 'cond': c, 'freq': f}), pd.DataFrame(con_values[:, :, ix_f])], axis=1)
+            df_cond.append(df_x_roi)
+
+        df_x_conds.append(pd.concat(df_cond))
+    df_area_export = pd.concat(df_x_conds, ignore_index=True)
+    df_area_export.to_csv(op.join(study_path, subj, 'results', 'tables', '%s_df_x_chan.csv' % subj))
 
 
 def power_analysis(subj):
@@ -572,6 +632,71 @@ def power_analysis(subj):
     pow_fig.savefig('{}/{}/figures/{}_gamma_pow_fig.eps' .format(study_path, subj, subj), format='eps', dpi=300)
 
 
+def make_n_ch_hist():
+    subjects = ['s1', 's2', 's3']
+
+    plt.style.use('classic')
+    print('pli matrix anatomical')
+    lobes_labels = ['Frontal', 'Temporal', 'Parietal', 'Occipital']
+
+    c = 'wake'
+    ref = 'avg'
+    l = '8s'
+
+    dfs = list()
+
+    for subj in subjects:
+        con, con_mat, con_tril, freqs, n_ch, ch_names, pos = load_pli_ieeg(study_path, subj, c, ref, l)
+
+        gm_chans, gm_names, gm_ch_info = select_gm_chans(subj, ref, study_path, ch_names)
+
+        # sort by anatomy
+        gm_ch_info['Original_ix'] = np.arange(0, len(gm_ch_info))
+
+        lobes = [x[1] for x in gm_ch_info['Lobe'].str.split().tolist()]
+        gm_ch_info['LobePlot'] = pd.Categorical(lobes, lobes_labels)
+        gm_ch_info_ordered = gm_ch_info.sort_values(by=['LobePlot', 'Electrode'])
+
+        dfs.append(gm_ch_info_ordered)
+
+    all_ch = pd.concat(dfs, ignore_index=True)
+    all_ch.LobePlot.value_counts().plot(kind='bar')
+
+    from collections import Counter
+    chans = Counter(all_ch.LobePlot.tolist())
+    chans_nr = [chans[k] for k in lobes_labels]
+
+    fig, ax = plt.subplots()
+    ax.barh(np.arange(len(lobes_labels)), chans_nr)
+    ax.set_yticks(np.arange(len(lobes_labels))+0.5)
+    ax.invert_yaxis()
+    ax.set_yticklabels(lobes_labels)
+    fig.savefig(op.join(study_path, 'figures', 'all_ch_bars.eps'), format='eps', dpi=300)
+
+
+def all_subj_nodes(subjs):
+    conds = ['wake', 'sleep']
+    freqs = ['alpha-H', 'gamma-L', 'gamma-M', 'gamma-H']
+
+    for cond in conds:
+        for fq in freqs:
+            subjs_nodes = list()
+            for ix_s, subj in enumerate(subjs):
+                s_file = op.join(study_path, subj, 'results', 'node_files', '{}_avg_{}_{}_nodes_avgPLI.node' .format(subj, cond, fq))
+                s_nodes = np.loadtxt(s_file)
+
+                # rescale sizes by wpli
+                s_nodes[:, 4] = d3_scale(s_nodes[:, 3], out_range=(0, 1.))
+                s_nodes[:, 3] = ix_s + 1
+                s_nodes[-2, 1] = 40.
+                s_nodes = np.vstack([s_nodes, np.array([[-70, 40, 70, ix_s+1, 0], [-70, 70, 70, ix_s+1, 1.]])])
+
+                subjs_nodes.append(s_nodes)
+            all_nodes = np.concatenate(subjs_nodes)
+            nodes_file = op.join(study_path, 'varios', 'all_subj_nodes_{}_{}_for_glass.node' .format(cond, fq))
+            make_bnw_nodes(nodes_file, all_nodes[:, 0:3], all_nodes[:, 3], all_nodes[:, 4])
+
+
 if __name__ == '__main__':
     for s in ['s1', 's2', 's3']:
         for r in ['avg']:
@@ -586,6 +711,7 @@ if __name__ == '__main__':
             # plot_smi_violin_all(s)
             # plot_smi_violin(s, r, '500ms')
             # plot_matrix_smi(s, conditions, r, '500ms')
+            plot_matrix_pli_anotomical(s, conditions, r, '8s')
         # plot_pli_matrix_scalp(s)
         # create_node_file(s, r)
         # for c in conditions:
@@ -594,4 +720,5 @@ if __name__ == '__main__':
             # plot_da(s)
         #export_deg_table(s, r)
         # conn_hfo_analysis(s)
-        power_analysis(s)
+        #power_analysis(s)
+

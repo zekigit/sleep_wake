@@ -8,6 +8,7 @@ import scipy.io as scio
 import os.path as op
 from scipy.stats import ttest_ind
 
+
 def prepro(raw, new_info, anodes, cathodes):
     # raw.plot(scalings={'eeg': 100e-6}, n_channels=raw.info['nchan'])
     base = raw.copy()  # Report mne! (also del bip chans)
@@ -190,3 +191,4 @@ def permutation_t_test(a, b, n_perm):
     else:
         p_permuted = len(np.where(t_list < t_real)[0]) / n_perm
     return t_real, t_list, p_permuted
+
