@@ -174,7 +174,7 @@ def plot_matrix_pli_anotomical(subj, conds, ref, l):
         cb.ax.set_title('wPLI', loc='right')
 
         print(gm_ch_info_ordered.LobePlot.unique())
-        con_fig.savefig('{}/{}/figures/{}_{}_{}_pli_{}_conmat_anatomical.eps' .format(study_path, subj, subj, c, ref, l), format='eps', dpi=300)
+        con_fig.savefig('{}/{}/figures/{}_{}_{}_pli_{}_conmat_anatomical_mgm.eps' .format(study_path, subj, subj, c, ref, l), format='eps', dpi=300)
 
     node_file = op.join(study_path, subj, 'info', '%s_nodes_by_lobe.node' % subj)
     coords = gm_ch_info_ordered[['natX', 'natY', 'natZ']].values
